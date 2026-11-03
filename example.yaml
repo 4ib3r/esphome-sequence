@@ -1,0 +1,80 @@
+esphome:
+  name: sequence-demo
+
+esp32:
+  board: esp32dev
+
+logger:
+
+# Pull the component from this repo's `components/` directory.
+# For a real device point `type: git` at the published repository instead.
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [sequence]
+
+# Two lights driven by the sequence. Any switchable entity works.
+output:
+  - platform: gpio
+    id: out_1
+    pin: GPIO16
+  - platform: gpio
+    id: out_2
+    pin: GPIO17
+
+light:
+  - platform: binary
+    id: l1
+    name: "Light 1"
+    output: out_1
+  - platform: binary
+    id: l2
+    name: "Light 2"
+    output: out_2
+
+# A relay we drive through custom actions instead of the simple list.
+switch:
+  - platform: gpio
+    id: relay
+    pin: GPIO18
+
+# --- The sequence --------------------------------------------------------
+# Stage 1: light 1 only
+# Stage 2: light 1 + light 2
+# Stage 3: custom on_enter (pulse a relay) on top of light 1
+# Then it wraps back to off. After 15 s idle, the next press turns off.
+sequence:
+  - id: living_room
+    timeout: 15s
+    loop: true
+    stages:
+      - lights: [l1]
+      - lights: [l1, l2]
+      - lights: [l1]
+        on_enter:
+          - switch.turn_on: relay
+    on_off:
+      - switch.turn_off: relay
+      - logger.log: "Sequence reset to off"
+
+# A push button advances the sequence on every press.
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO0
+      mode: INPUT_PULLUP
+      inverted: true
+    name: "Cycle button"
+    on_press:
+      - sequence.advance: living_room
+
+  # A separate button that turns the whole sequence off.
+  - platform: gpio
+    pin:
+      number: GPIO4
+      mode: INPUT_PULLUP
+      inverted: true
+    name: "Off button"
+    on_press:
+      - sequence.off: living_room
